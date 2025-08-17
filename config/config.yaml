@@ -1,0 +1,15 @@
+services:
+    - name: authService
+      port: 8000
+      proxyPort: 5000
+    - name: dashboardService
+      port: 8001
+      proxyPort: 5001
+
+
+mesh:
+  mTLS: enabled
+  logging: enabled
+  allowedCalls:
+    - from: authService
+      to: dashboardService          
