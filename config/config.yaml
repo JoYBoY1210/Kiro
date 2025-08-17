@@ -5,6 +5,9 @@ services:
     - name: dashboardService
       port: 8001
       proxyPort: 5001
+    - name: profileService
+      port: 8002
+      proxyPort: 5002  
 
 
 mesh:
