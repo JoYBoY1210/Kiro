@@ -33,6 +33,26 @@ type AllowedCalls struct {
 	To   string `yaml:"to"`
 }
 
+func buildServiceMap(servicesCfg []Service) map[string]int {
+	serviceMap := make(map[string]int)
+	for _, s := range servicesCfg {
+		serviceMap[s.Name] = s.ProxyPort
+	}
+	return serviceMap
+
+}
+
+func buildAllowed(meshCfg Mesh) map[string]map[string]bool {
+	m := make(map[string]map[string]bool)
+	for _, ac := range meshCfg.AllowedCalls {
+		if _, ok := m[ac.From]; !ok {
+			m[ac.From] = make(map[string]bool)
+		}
+		m[ac.From][ac.To] = true
+	}
+	return m
+}
+
 func loadConfig(path string) (Config, error) {
 	var config Config
 	file, err := os.ReadFile(path)
@@ -53,6 +73,9 @@ func main() {
 		log.Println("config could not be loaded, error: ", err)
 		return
 	}
+	serviceMap := buildServiceMap(config.Services)
+	allowedCallsMap := buildAllowed(config.Mesh)
+
 	fmt.Println("services: ")
 	for _, s := range config.Services {
 		fmt.Printf("- %s, port: %d, proxyPort: %d", s.Name, s.Port, s.ProxyPort)
@@ -75,9 +98,13 @@ func main() {
 		go func(s Service) {
 			defer wg.Done()
 			if s.Name == "authService" {
-				services.StartAuthService(s.Port)
+				services.StartAuthService(s.Port, s.ProxyPort)
 			} else if s.Name == "dashboardService" {
-				services.StartDashboardService(s.Port)
+				services.StartDashboardService(s.Port, s.ProxyPort)
+			} else if s.Name == "profileService" {
+				services.StartProfileService(s.Port,s.ProxyPort)
+			} else {
+				fmt.Println("unknown service")
 			}
 
 		}(s)
@@ -88,6 +115,8 @@ func main() {
 				ServiceName: s.Name,
 				ListenPort:  s.ProxyPort,
 				TargetPort:  s.Port,
+				ServiceMap:  serviceMap,
+				Allowed:     allowedCallsMap,
 			}
 			p.Start()
 

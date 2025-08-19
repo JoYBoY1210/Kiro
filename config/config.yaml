@@ -15,4 +15,7 @@ mesh:
   logging: enabled
   allowedCalls:
     - from: authService
-      to: dashboardService          
+      to: dashboardService   
+    - from: dashboardService
+      to: profileService  
+
