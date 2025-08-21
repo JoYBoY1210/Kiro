@@ -9,6 +9,7 @@ import (
 
 func StartDashboardService(port int, proxyPort int) {
 	mux := http.NewServeMux()
+	client := MeshClient(proxyPort)
 
 	mux.HandleFunc("/dashboard", func(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[DASHBOARD] /dashboard called from %s method=%s", r.RemoteAddr, r.Method)
@@ -16,20 +17,14 @@ func StartDashboardService(port int, proxyPort int) {
 	})
 
 	mux.HandleFunc("/profile", func(w http.ResponseWriter, r *http.Request) {
-		log.Printf("[DASHBOARD] /profile called from %s method=%s", r.RemoteAddr, r.Method)
-		url := fmt.Sprintf("http://localhost:%d/kiro/route/profileService/profile", proxyPort)
-		resp, err := http.Get(url)
+		resp, err := client.Get("http://profileService/profile")
 		if err != nil {
-			log.Printf("[DASHBOARD][ERROR] calling profile via proxy failed: %v", err)
-			http.Error(w, "calling profile via proxy failed: "+err.Error(), http.StatusBadGateway)
+			http.Error(w, "dashboard->profile failed: "+err.Error(), http.StatusBadGateway)
 			return
 		}
 		defer resp.Body.Close()
 		w.WriteHeader(resp.StatusCode)
-		_, err = io.Copy(w, resp.Body)
-		if err != nil {
-			log.Printf("[DASHBOARD][ERROR] copying profile response body: %v", err)
-		}
+		io.Copy(w, resp.Body)
 	})
 
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {

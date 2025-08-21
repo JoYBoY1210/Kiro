@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 	"sync"
 
 	"github.com/JoYBoY1210/kiro/proxy"
@@ -36,7 +37,7 @@ type AllowedCalls struct {
 func buildServiceMap(servicesCfg []Service) map[string]int {
 	serviceMap := make(map[string]int)
 	for _, s := range servicesCfg {
-		serviceMap[s.Name] = s.ProxyPort
+		serviceMap[strings.ToLower(s.Name)] = s.ProxyPort
 	}
 	return serviceMap
 
@@ -45,10 +46,10 @@ func buildServiceMap(servicesCfg []Service) map[string]int {
 func buildAllowed(meshCfg Mesh) map[string]map[string]bool {
 	m := make(map[string]map[string]bool)
 	for _, ac := range meshCfg.AllowedCalls {
-		if _, ok := m[ac.From]; !ok {
-			m[ac.From] = make(map[string]bool)
+		if _, ok := m[strings.ToLower(ac.From)]; !ok {
+			m[strings.ToLower(ac.From)] = make(map[string]bool)
 		}
-		m[ac.From][ac.To] = true
+		m[strings.ToLower(ac.From)][strings.ToLower(ac.To)] = true
 	}
 	return m
 }
@@ -75,6 +76,12 @@ func main() {
 	}
 	serviceMap := buildServiceMap(config.Services)
 	allowedCallsMap := buildAllowed(config.Mesh)
+	// fmt.Println("Allowed map contents:")
+	// for from, tos := range allowedCallsMap {
+	// 	for to := range tos {
+	// 		fmt.Printf("  %s -> %s\n", from, to)
+	// 	}
+	// }
 
 	fmt.Println("services: ")
 	for _, s := range config.Services {
@@ -102,7 +109,7 @@ func main() {
 			} else if s.Name == "dashboardService" {
 				services.StartDashboardService(s.Port, s.ProxyPort)
 			} else if s.Name == "profileService" {
-				services.StartProfileService(s.Port,s.ProxyPort)
+				services.StartProfileService(s.Port, s.ProxyPort)
 			} else {
 				fmt.Println("unknown service")
 			}
@@ -112,7 +119,7 @@ func main() {
 		go func(s Service) {
 			defer wg.Done()
 			p := proxy.Proxy{
-				ServiceName: s.Name,
+				ServiceName: strings.ToLower(s.Name),
 				ListenPort:  s.ProxyPort,
 				TargetPort:  s.Port,
 				ServiceMap:  serviceMap,

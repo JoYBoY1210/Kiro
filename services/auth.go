@@ -9,6 +9,7 @@ import (
 
 func StartAuthService(port int, proxyPort int) {
 	mux := http.NewServeMux()
+	client := MeshClient(proxyPort)
 
 	mux.HandleFunc("/auth", func(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[AUTH] /auth endpoint called from %s method=%s", r.RemoteAddr, r.Method)
@@ -27,21 +28,14 @@ func StartAuthService(port int, proxyPort int) {
 	})
 
 	mux.HandleFunc("/dashboard", func(w http.ResponseWriter, r *http.Request) {
-		log.Printf("[AUTH] /dashboard proxy call initiated by %s method=%s", r.RemoteAddr, r.Method)
-		url := fmt.Sprintf("http://localhost:%d/kiro/route/dashboardService/dashboard", proxyPort)
-		resp, err := http.Get(url)
+		resp, err := client.Get("http://profileService/profile")
 		if err != nil {
-			log.Printf("[AUTH][ERROR] failed to call dashboard via proxy: %v", err)
-			http.Error(w, "calling dashboard via proxy failed: "+err.Error(), http.StatusBadGateway)
+			http.Error(w, "auth->dashboard failed: "+err.Error(), http.StatusBadGateway)
 			return
 		}
 		defer resp.Body.Close()
-
 		w.WriteHeader(resp.StatusCode)
-		_, err = io.Copy(w, resp.Body)
-		if err != nil {
-			log.Printf("[AUTH][ERROR] error copying response body: %v", err)
-		}
+		io.Copy(w, resp.Body)
 	})
 
 	addr := fmt.Sprintf(":%d", port)
