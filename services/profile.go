@@ -11,6 +11,7 @@ func StartProfileService(port int, proxyPort int) {
 
 	mux.HandleFunc("/profile", func(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[PROFILE] /profile called from %s method=%s", r.RemoteAddr, r.Method)
+
 		w.Header().Set("Content-Type", "application/json")
 		fmt.Fprintf(w, `{"Service":"Profile","message":"profile data here"}`)
 	})

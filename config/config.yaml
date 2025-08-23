@@ -17,5 +17,14 @@ mesh:
     - from: authService
       to: dashboardService   
     - from: dashboardService
-      to: profileService  
-
+      to: profileService
+  auth:
+    mode: hmac
+    hmacSecret: "secretttShushhhh"
+    clockSkew: 60
+    requiredLocalCaller: true
+  headers:
+    identity: X-Kiro-Identity
+    caller: X-Kiro-Caller
+    timestamp: X-Kiro-Timestamp       
+    signature: X-Kiro-Signature

@@ -1,38 +1,63 @@
 package proxy
 
 import (
+	"crypto/hmac"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
+	"time"
+
+	"github.com/JoYBoY1210/kiro/security"
 )
 
 type Proxy struct {
-	ServiceName string
-	ListenPort  int
-	TargetPort  int
-	ServiceMap  map[string]int
-	Allowed     map[string]map[string]bool
+	ServiceName         string
+	ListenPort          int
+	TargetPort          int
+	ServiceMap          map[string]int
+	Allowed             map[string]map[string]bool
+	AuthMode            string
+	HMACSecret          []byte
+	ClockSkew           int
+	RequiredLocalCaller bool
+	HeaderIdentity      string
+	HeaderTimestamp     string
+	HeaderSignature     string
+	HeaderCallerChain   string
 }
 
 func (p *Proxy) Start() {
 	targetUrl, _ := url.Parse(fmt.Sprintf("http://localhost:%d", p.TargetPort))
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// fmt.Println("host name is: ", r.Host)
 		host := normalizeHost(r.Host)
+		// fmt.Println("host name is: ", host)
+		// fmt.Println(r.Host)
 
 		if host == "" || host == p.ServiceName {
+
+			if strings.EqualFold(p.AuthMode, "hmac") && len(p.HMACSecret) > 0 {
+				if err := p.verifyRequest(r); err != nil {
+					log.Printf("[proxy:%s] VERIFY FAIL ", p.ServiceName)
+					http.Error(w, "unauthorized: "+err.Error(), http.StatusForbidden)
+					return
+				}
+			}
+
 			log.Printf("[proxy:%s] LOCAL %s %s -> :%d", p.ServiceName, r.Method, r.URL.Path, p.TargetPort)
 			req, _ := http.NewRequest(r.Method, targetUrl.String()+r.URL.Path, r.Body)
 			req.Header = r.Header.Clone()
-			chain := r.Header.Get("X-Kiro-Caller")
+			chain := r.Header.Get(p.HeaderCallerChain)
 			if chain == "" {
 				chain = p.ServiceName
 			} else {
 				chain = chain + "->" + p.ServiceName
 			}
-			req.Header.Set("X-Kiro-Caller", chain)
+			req.Header.Set(p.HeaderCallerChain, chain)
 			resp, err := http.DefaultClient.Do(req)
 			if err != nil {
 				http.Error(w, "local forward error: "+err.Error(), http.StatusBadGateway)
@@ -52,11 +77,17 @@ func (p *Proxy) Start() {
 			http.Error(w, "Blcoked by mesh policy", http.StatusForbidden)
 			return
 		}
+
 		targetProxyPort, ok := p.ServiceMap[target]
 		if !ok {
 			http.Error(w, "Unknown service: "+target, http.StatusNotFound)
 			return
 		}
+
+		// if p.RequiredLocalCaller && !isLoopback(r) {
+		// 	http.Error(w, "External requests no allowed", http.StatusForbidden)
+		// 	return
+		// }
 
 		finalUrl := fmt.Sprintf("http://localhost:%d%s", targetProxyPort, r.URL.Path)
 		log.Printf("[proxy:%s] ROUTE %s %s -> %s(:%d)", p.ServiceName, r.Method, r.URL.Path, target, targetProxyPort)
@@ -66,8 +97,27 @@ func (p *Proxy) Start() {
 			return
 		}
 		req.Header = r.Header.Clone()
-		req.Header.Set("X-Kiro-Caller", p.ServiceName)
+
+		if strings.EqualFold(p.AuthMode, "hmac") && len(p.HMACSecret) > 0 {
+			ts := strconv.FormatInt(time.Now().Unix(), 10)
+			canonical := security.CanonicalFromRequest(p.ServiceName, target, ts, r)
+			sign := security.Sign(p.HMACSecret, canonical)
+
+			req.Header.Set(p.HeaderIdentity, p.ServiceName)
+			req.Header.Set(p.HeaderTimestamp, ts)
+			req.Header.Set(p.HeaderSignature, sign)
+
+		}
+
+		chain := r.Header.Get(p.HeaderCallerChain)
+		if chain == "" {
+			chain = p.ServiceName
+		} else {
+			chain = chain + "->" + p.ServiceName
+		}
+		req.Header.Set(p.HeaderCallerChain, chain)
 		req.Host = target
+
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
 			http.Error(w, "Internal routing error: "+err.Error(), http.StatusInternalServerError)
@@ -107,4 +157,43 @@ func normalizeHost(h string) string {
 		return ""
 	}
 	return h
+}
+
+// func isLoopback(r *http.Request) bool {
+// 	host, _, err := net.SplitHostPort(r.RemoteAddr)
+// 	if err != nil {
+// 		return false
+// 	}
+// 	ip := net.ParseIP(host)
+// 	if ip == nil {
+// 		return false
+// 	}
+
+// 	return ip.IsLoopback()
+// }
+
+func (p *Proxy) verifyRequest(r *http.Request) error {
+	identity := r.Header.Get(p.HeaderIdentity)
+	ts := r.Header.Get(p.HeaderTimestamp)
+	sign := r.Header.Get(p.HeaderSignature)
+
+	if identity == "" || ts == "" || sign == "" {
+		return fmt.Errorf("Headers missing")
+	}
+
+	t, err := strconv.ParseInt(ts, 10, 64)
+	if err != nil {
+		return fmt.Errorf("invalid timestamp")
+
+	}
+	now := time.Now().Unix()
+	if (now - t) > int64(p.ClockSkew) {
+		return fmt.Errorf("too much time taken")
+	}
+	canonical := security.CanonicalFromRequest(identity, p.ServiceName, ts, r)
+	expected := security.Sign(p.HMACSecret, canonical)
+	if !hmac.Equal([]byte(sign), []byte(expected)) {
+		return fmt.Errorf("invalid signature")
+	}
+	return nil
 }

@@ -38,6 +38,8 @@ func StartDashboardService(port int, proxyPort int) {
 		return
 	})
 
+	
+
 	addr := fmt.Sprintf(":%d", port)
 	log.Printf("[DASHBOARD] started on %s with proxy on %d", addr, proxyPort)
 	http.ListenAndServe(addr, mux)

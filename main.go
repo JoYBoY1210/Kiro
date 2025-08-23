@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	// "io"
 	"log"
 	"os"
 	"strings"
@@ -27,6 +28,20 @@ type Mesh struct {
 	MTLS         string         `yaml:"mTLS"`
 	Logging      string         `yaml:"logging"`
 	AllowedCalls []AllowedCalls `yaml:"allowedCalls"`
+	Auth         Auth           `ymall:"auth"`
+	Headers      Headers        `yaml:"headers"`
+}
+type Auth struct {
+	Mode                string `yaml:"mode"`
+	HMACSecret          string `yaml:"hmacSecret"`
+	ClockSkew           int    `yaml:"clockSkew"`
+	RequiredLocalCaller bool   `yaml:"requiredLocalCaller"`
+}
+type Headers struct {
+	Identity  string `yaml:"identity"`
+	Caller    string `yaml:"caller"`
+	Timestamp string `yaml:"timestamp"`
+	Signature string `yaml:"signature"`
 }
 
 type AllowedCalls struct {
@@ -119,16 +134,36 @@ func main() {
 		go func(s Service) {
 			defer wg.Done()
 			p := proxy.Proxy{
-				ServiceName: strings.ToLower(s.Name),
-				ListenPort:  s.ProxyPort,
-				TargetPort:  s.Port,
-				ServiceMap:  serviceMap,
-				Allowed:     allowedCallsMap,
+				ServiceName:         strings.ToLower(s.Name),
+				ListenPort:          s.ProxyPort,
+				TargetPort:          s.Port,
+				ServiceMap:          serviceMap,
+				Allowed:             allowedCallsMap,
+				AuthMode:            config.Mesh.Auth.Mode,
+				HMACSecret:          []byte(config.Mesh.Auth.HMACSecret),
+				ClockSkew:           config.Mesh.Auth.ClockSkew,
+				RequiredLocalCaller: config.Mesh.Auth.RequiredLocalCaller,
+				HeaderIdentity:      config.Mesh.Headers.Identity,
+				HeaderTimestamp:     config.Mesh.Headers.Timestamp,
+				HeaderSignature:     config.Mesh.Headers.Signature,
+				HeaderCallerChain:   config.Mesh.Headers.Caller,
 			}
+
 			p.Start()
 
 		}(s)
 	}
+	// client := services.MeshClient(5000)
+	// resp, err := client.Get("http://profileService/profile")
+	// if err != nil {
+	// 	fmt.Println("err: ", err)
+	// }
+	// defer resp.Body.Close()
+	// body, err := io.ReadAll(resp.Body)
+	// if err != nil {
+	// 	fmt.Println("err: ", err)
+	// }
+	// fmt.Println("body: ", string(body))
 
 	wg.Wait()
 }
