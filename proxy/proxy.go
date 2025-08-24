@@ -2,11 +2,14 @@ package proxy
 
 import (
 	"crypto/hmac"
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -28,15 +31,45 @@ type Proxy struct {
 	HeaderTimestamp     string
 	HeaderSignature     string
 	HeaderCallerChain   string
+	CertFile            string
+	KeyFile             string
+	CAFile              string
 }
 
 func (p *Proxy) Start() {
-	targetUrl, _ := url.Parse(fmt.Sprintf("http://localhost:%d", p.TargetPort))
+
+	cert, err := tls.LoadX509KeyPair(p.CertFile, p.KeyFile)
+	if err != nil {
+		log.Fatalf("[proxy:%s] LoadX509KeyPair error: %v", p.ServiceName, err)
+		return
+	}
+	caCert, err := os.ReadFile(p.CAFile)
+	if err != nil {
+		log.Fatalf("[proxy:%s] Read CA cert error: %v", p.ServiceName, err)
+		return
+	}
+	caCertPool := x509.NewCertPool()
+	caCertPool.AppendCertsFromPEM(caCert)
+
+	tlsConfig := &tls.Config{
+		Certificates: []tls.Certificate{cert},
+		ClientCAs:    caCertPool,
+		ClientAuth:   tls.RequireAndVerifyClientCert,
+		MinVersion:   tls.VersionTLS12,
+		VerifyPeerCertificate: func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
+			for _, chain := range verifiedChains {
+				for _, cert := range chain {
+					log.Printf("[proxy:%s] Client cert: CN=%s, DNS=%v", p.ServiceName, cert.Subject.CommonName, cert.DNSNames)
+				}
+			}
+			return nil
+		},
+	}
+
+	targetUrl, _ := url.Parse(fmt.Sprintf("http://%s:%d", p.ServiceName, p.TargetPort))
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// fmt.Println("host name is: ", r.Host)
+
 		host := normalizeHost(r.Host)
-		// fmt.Println("host name is: ", host)
-		// fmt.Println(r.Host)
 
 		if host == "" || host == p.ServiceName {
 
@@ -89,7 +122,10 @@ func (p *Proxy) Start() {
 		// 	return
 		// }
 
-		finalUrl := fmt.Sprintf("http://localhost:%d%s", targetProxyPort, r.URL.Path)
+		finalUrl := fmt.Sprintf("https://%s:%d%s", target, targetProxyPort, r.URL.Path)
+
+		client := p.mTLSClient()
+
 		log.Printf("[proxy:%s] ROUTE %s %s -> %s(:%d)", p.ServiceName, r.Method, r.URL.Path, target, targetProxyPort)
 		req, err := http.NewRequest(r.Method, finalUrl, r.Body)
 		if err != nil {
@@ -118,7 +154,7 @@ func (p *Proxy) Start() {
 		req.Header.Set(p.HeaderCallerChain, chain)
 		req.Host = target
 
-		resp, err := http.DefaultClient.Do(req)
+		resp, err := client.Do(req)
 		if err != nil {
 			http.Error(w, "Internal routing error: "+err.Error(), http.StatusInternalServerError)
 			return
@@ -133,9 +169,46 @@ func (p *Proxy) Start() {
 		io.Copy(w, resp.Body)
 
 	})
-	addr := fmt.Sprintf(":%d", p.ListenPort)
-	log.Printf("[proxy:%s] listening on %s -> app :%d", p.ServiceName, addr, p.TargetPort)
-	http.ListenAndServe(addr, handler)
+	server := &http.Server{
+		Addr:      fmt.Sprintf(":%d", p.ListenPort),
+		Handler:   handler,
+		TLSConfig: tlsConfig,
+	}
+
+	log.Printf("[proxy:%s] listening on :%d -> app :%d", p.ServiceName, p.ListenPort, p.TargetPort)
+	log.Fatal(server.ListenAndServeTLS("", ""))
+}
+
+func (p *Proxy) mTLSClient() *http.Client {
+	cert, err := tls.LoadX509KeyPair(p.CertFile, p.KeyFile)
+	if err != nil {
+		log.Fatalf("[proxy:%s] failed loading client cert/key: %v", p.ServiceName, err)
+	}
+	caCert, err := os.ReadFile(p.CAFile)
+	if err != nil {
+		log.Fatalf("[proxy:%s] failed reading CA cert: %v", p.ServiceName, err)
+	}
+	caPool := x509.NewCertPool()
+	caPool.AppendCertsFromPEM(caCert)
+
+	tlsConfig := &tls.Config{
+		Certificates: []tls.Certificate{cert},
+		RootCAs:      caPool,
+		MinVersion:   tls.VersionTLS12,
+		VerifyPeerCertificate: func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
+			for _, chain := range verifiedChains {
+				for _, cert := range chain {
+					log.Printf("[proxy:%s] Client cert: CN=%s, DNS=%v", p.ServiceName, cert.Subject.CommonName, cert.DNSNames)
+				}
+			}
+			return nil
+		},
+	}
+	return &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: tlsConfig,
+		},
+	}
 }
 
 func (p *Proxy) isAllowed(from, to string) bool {

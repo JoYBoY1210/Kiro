@@ -7,9 +7,9 @@ import (
 	"net/http"
 )
 
-func StartAuthService(port int, proxyPort int) {
+func StartAuthService(port int, name string, proxyPort int, certFile, keyFile, caFile string) {
 	mux := http.NewServeMux()
-	client := MeshClient(proxyPort)
+	client := MeshClient(proxyPort, name, certFile, keyFile, caFile)
 
 	mux.HandleFunc("/auth", func(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[AUTH] /auth endpoint called from %s method=%s", r.RemoteAddr, r.Method)
@@ -28,7 +28,7 @@ func StartAuthService(port int, proxyPort int) {
 	})
 
 	mux.HandleFunc("/dashboard", func(w http.ResponseWriter, r *http.Request) {
-		resp, err := client.Get("http://profileService/profile")
+		resp, err := client.Get("https://profileService/profile")
 		if err != nil {
 			http.Error(w, "auth->dashboard failed: "+err.Error(), http.StatusBadGateway)
 			return
@@ -38,7 +38,7 @@ func StartAuthService(port int, proxyPort int) {
 		io.Copy(w, resp.Body)
 	})
 
-	addr := fmt.Sprintf(":%d", port)
+	addr := fmt.Sprintf("127.0.0.1:%d", port)
 	log.Printf("[AUTH] Auth service started on %s with proxy on %d", addr, proxyPort)
 	http.ListenAndServe(addr, mux)
 }

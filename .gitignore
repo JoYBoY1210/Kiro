@@ -1,0 +1,13 @@
+/security/certs/ca.key
+/security/certs/dashboard.crt
+/security/certs/dashboard.key
+/security/certs/auth.crt
+/security/certs/auth.key
+/security/certs/profile.crt
+/security/certs/profile.key
+/security/certs/dashboardService.crt
+/security/certs/dashboardService.key
+/security/certs/authService.crt
+/security/certs/authService.key
+/security/certs/profileService.crt
+/security/certs/profileService.key

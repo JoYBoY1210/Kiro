@@ -7,9 +7,9 @@ import (
 	"net/http"
 )
 
-func StartDashboardService(port int, proxyPort int) {
+func StartDashboardService(port int, name string, proxyPort int, certFile, keyFile, caFile string) {
 	mux := http.NewServeMux()
-	client := MeshClient(proxyPort)
+	client := MeshClient(proxyPort, name, certFile, keyFile, caFile)
 
 	mux.HandleFunc("/dashboard", func(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[DASHBOARD] /dashboard called from %s method=%s", r.RemoteAddr, r.Method)
@@ -38,9 +38,7 @@ func StartDashboardService(port int, proxyPort int) {
 		return
 	})
 
-	
-
-	addr := fmt.Sprintf(":%d", port)
+	addr := fmt.Sprintf("127.0.0.1:%d", port)
 	log.Printf("[DASHBOARD] started on %s with proxy on %d", addr, proxyPort)
 	http.ListenAndServe(addr, mux)
 }

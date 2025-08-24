@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	// "io"
+	// "io"
 	"log"
 	"os"
 	"strings"
@@ -28,7 +29,7 @@ type Mesh struct {
 	MTLS         string         `yaml:"mTLS"`
 	Logging      string         `yaml:"logging"`
 	AllowedCalls []AllowedCalls `yaml:"allowedCalls"`
-	Auth         Auth           `ymall:"auth"`
+	Auth         Auth           `yaml:"auth"`
 	Headers      Headers        `yaml:"headers"`
 }
 type Auth struct {
@@ -120,11 +121,11 @@ func main() {
 		go func(s Service) {
 			defer wg.Done()
 			if s.Name == "authService" {
-				services.StartAuthService(s.Port, s.ProxyPort)
+				services.StartAuthService(s.Port, s.Name, s.ProxyPort, "./security/certs/auth.crt", "./security/certs/auth.key", "./security/certs/ca.crt")
 			} else if s.Name == "dashboardService" {
-				services.StartDashboardService(s.Port, s.ProxyPort)
+				services.StartDashboardService(s.Port, s.Name, s.ProxyPort, "./security/certs/dashboard.crt", "./security/certs/dashboard.key", "./security/certs/ca.crt")
 			} else if s.Name == "profileService" {
-				services.StartProfileService(s.Port, s.ProxyPort)
+				services.StartProfileService(s.Port, s.Name, s.ProxyPort, "./security/certs/profile.crt", "./security/certs/profile.key", "./security/certs/ca.crt")
 			} else {
 				fmt.Println("unknown service")
 			}
@@ -147,14 +148,17 @@ func main() {
 				HeaderTimestamp:     config.Mesh.Headers.Timestamp,
 				HeaderSignature:     config.Mesh.Headers.Signature,
 				HeaderCallerChain:   config.Mesh.Headers.Caller,
+				CertFile:            "./security/certs/" + s.Name + ".crt",
+				KeyFile:             "./security/certs/" + s.Name + ".key",
+				CAFile:              "./security/certs/ca.crt",
 			}
 
 			p.Start()
 
 		}(s)
 	}
-	// client := services.MeshClient(5000)
-	// resp, err := client.Get("http://profileService/profile")
+	// client := services.MeshClient(5001, "dashboardService", "./security/certs/dashboard.crt", "./security/certs/dashboard.key", "./security/certs/ca.crt")
+	// resp, err := client.Get("http://authService/auth")
 	// if err != nil {
 	// 	fmt.Println("err: ", err)
 	// }

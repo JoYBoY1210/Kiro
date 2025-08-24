@@ -6,7 +6,7 @@ import (
 	"net/http"
 )
 
-func StartProfileService(port int, proxyPort int) {
+func StartProfileService(port int, name string, proxyPort int, certFile, keyFile, caFile string) {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/profile", func(w http.ResponseWriter, r *http.Request) {
@@ -21,7 +21,7 @@ func StartProfileService(port int, proxyPort int) {
 		fmt.Fprintf(w, "ok")
 	})
 
-	addr := fmt.Sprintf(":%d", port)
+	addr := fmt.Sprintf("127.0.0.1:%d", port)
 	log.Printf("[PROFILE] Profile service started on %s with proxy on %d", addr, proxyPort)
 	http.ListenAndServe(addr, mux)
 }
