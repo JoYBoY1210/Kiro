@@ -32,10 +32,10 @@ Mesh policy enforcement
 
 Architecture 🏗️
 
-[dashboardService] <--> [dashboardService Proxy] <--> [profileService Proxy] <--> [profileService]
-                            |
-                            v
-                  Logs & HMAC verification
+[Dashboard Service] <--> [Dashboard Proxy] <--> [Profile Proxy] <--> [Profile Service]
+       |
+       v
+    Logs & HMAC verification
 
 All inter-service requests go through proxies, ensuring secure, authenticated, and logged communication.
 
@@ -58,26 +58,16 @@ This will generate:
 
 CA certificate (KiroCA)
 
-Service certificates for each service (dashboardService, profileService, authService)
+Service certificates for each service (Dashboard, Profile, Auth)
 
 Proxy certificates
 
-
-Modifying Hosts File for Development 🏠
-
-⚠️ Important for local dev: Since there are no real domains, you need to add all service names with IP 127.0.0.1 (or your localhost IP) in your /etc/hosts file:
-
-127.0.0.1 authService
-127.0.0.1 dashboardService
-127.0.0.1 profileService
-
-This ensures that mTLS hostname verification works correctly.
 
 Starting the Services 🚀
 
 All services can be started from the main.go file. Simply run:
 
-go run .
+go run main.go
 
 This will start all services along with their proxies. By default, services listen on 127.0.0.1 for security.
 
