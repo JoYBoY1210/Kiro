@@ -33,9 +33,9 @@ Mesh policy enforcement
 Architecture 🏗️
 
 [dashboardService] <--> [dashboardService Proxy] <--> [profileService Proxy] <--> [profileService]
-       |
-       v
-    Logs & HMAC verification
+                            |
+                            v
+                  Logs & HMAC verification
 
 All inter-service requests go through proxies, ensuring secure, authenticated, and logged communication.
 
@@ -65,10 +65,7 @@ Proxy certificates
 
 Modifying Hosts File for Development 🏠
 
-> ⚠️ Important for local dev:
-Since there are no real domains, you need to add all service names with IP 127.0.0.1 (or your localhost IP) in your /etc/hosts file:
-
-
+⚠️ Important for local dev: Since there are no real domains, you need to add all service names with IP 127.0.0.1 (or your localhost IP) in your /etc/hosts file:
 
 127.0.0.1 authService
 127.0.0.1 dashboardService
