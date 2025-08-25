@@ -56,14 +56,6 @@ func (p *Proxy) Start() {
 		ClientCAs:    caCertPool,
 		ClientAuth:   tls.RequireAndVerifyClientCert,
 		MinVersion:   tls.VersionTLS12,
-		VerifyPeerCertificate: func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
-			for _, chain := range verifiedChains {
-				for _, cert := range chain {
-					log.Printf("[proxy:%s] Client cert: CN=%s, DNS=%v", p.ServiceName, cert.Subject.CommonName, cert.DNSNames)
-				}
-			}
-			return nil
-		},
 	}
 
 	targetUrl, _ := url.Parse(fmt.Sprintf("http://%s:%d", p.ServiceName, p.TargetPort))
@@ -195,14 +187,6 @@ func (p *Proxy) mTLSClient() *http.Client {
 		Certificates: []tls.Certificate{cert},
 		RootCAs:      caPool,
 		MinVersion:   tls.VersionTLS12,
-		VerifyPeerCertificate: func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
-			for _, chain := range verifiedChains {
-				for _, cert := range chain {
-					log.Printf("[proxy:%s] Client cert: CN=%s, DNS=%v", p.ServiceName, cert.Subject.CommonName, cert.DNSNames)
-				}
-			}
-			return nil
-		},
 	}
 	return &http.Client{
 		Transport: &http.Transport{
